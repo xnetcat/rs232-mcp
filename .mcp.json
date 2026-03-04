@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rs232": {
+      "command": "npx",
+      "args": ["github:xnetcat/rs232-mcp"]
+    }
+  }
+}
