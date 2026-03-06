@@ -129,27 +129,28 @@ export function registerTools(
 
   server.tool(
     "write_raw",
-    "Write raw string data to a serial port (no prompt waiting)",
+    "Write raw string data to a serial port (no prompt waiting). Supports escape sequences: \\r \\n \\t \\x03 (Ctrl+C) etc.",
     {
       path: z.string().describe("Serial port path"),
-      data: z.string().describe("Raw data to write"),
+      data: z.string().describe("Raw data to write. Use \\r for CR, \\n for LF, \\x03 for Ctrl+C, \\x1b for ESC"),
     },
     async ({ path, data }) => {
       try {
-        // Process common escape sequences
+        // Process escape sequences: \r \n \t \xHH
         const processed = data
           .replace(/\\r/g, "\r")
           .replace(/\\n/g, "\n")
           .replace(/\\t/g, "\t")
-          .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+          .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) =>
             String.fromCharCode(parseInt(hex, 16))
-          );
+          )
+          .replace(/\\{2}/g, "\\"); // \\\\ -> \
         manager.write(path, processed);
         return {
           content: [
             {
               type: "text",
-              text: `Wrote ${processed.length} characters to ${path}`,
+              text: `Wrote ${processed.length} bytes to ${path}`,
             },
           ],
         };
