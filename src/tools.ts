@@ -136,12 +136,20 @@ export function registerTools(
     },
     async ({ path, data }) => {
       try {
-        manager.write(path, data);
+        // Process common escape sequences
+        const processed = data
+          .replace(/\\r/g, "\r")
+          .replace(/\\n/g, "\n")
+          .replace(/\\t/g, "\t")
+          .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+            String.fromCharCode(parseInt(hex, 16))
+          );
+        manager.write(path, processed);
         return {
           content: [
             {
               type: "text",
-              text: `Wrote ${data.length} characters to ${path}`,
+              text: `Wrote ${processed.length} characters to ${path}`,
             },
           ],
         };

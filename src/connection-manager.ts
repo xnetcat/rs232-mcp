@@ -25,6 +25,8 @@ export type SerialPortConstructor = new (options: {
 }) => InstanceType<typeof SerialPort>;
 
 const CISCO_PROMPT_RE = /[\w\-\.]+(?:\([^\)]*\))?[>#]\s*$/;
+const INPUT_PROMPT_RE = /(?:Password|Username|password|username)\s*:\s*$/;
+const CONFIRM_PROMPT_RE = /\[(?:confirm|yes\/no|no\/yes|yes|no)\]\s*$/i;
 const MORE_RE = / ?--More-- ?/;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -120,24 +122,42 @@ export class ConnectionManager {
     // Drain any existing buffer
     conn.buffer = "";
 
-    // Send command with CRLF
-    conn.port.write(command + "\r\n");
-
     const output = await new Promise<string>((resolve, reject) => {
       let resolved = false;
+      let lastBufferLen = 0;
+      let stableCount = 0;
+
       const timer = setTimeout(() => {
         if (resolved) return;
         resolved = true;
         cleanup();
-        // Return whatever we have on timeout instead of empty
         const result = conn.buffer.replace(/\r/g, "");
         resolve(result);
       }, timeoutMs);
 
       // Poll the buffer periodically to catch prompt reliably
+      // and detect when output has stabilized (no new data)
       const pollInterval = setInterval(() => {
         if (resolved) return;
         checkBuffer();
+
+        // If buffer has data but hasn't changed for 500ms, return it
+        // This handles cases like blank prompts or unexpected output
+        const currentLen = conn.buffer.length;
+        if (currentLen > 0 && currentLen === lastBufferLen) {
+          stableCount++;
+          if (stableCount >= 5) {
+            // 5 * 100ms = 500ms of stable buffer
+            resolved = true;
+            clearTimeout(timer);
+            clearInterval(pollInterval);
+            cleanup();
+            resolve(conn.buffer.replace(/\r/g, ""));
+          }
+        } else {
+          stableCount = 0;
+          lastBufferLen = currentLen;
+        }
       }, 100);
 
       const checkBuffer = () => {
@@ -150,8 +170,12 @@ export class ConnectionManager {
           return;
         }
 
-        // Check for Cisco prompt
-        if (CISCO_PROMPT_RE.test(collected)) {
+        // Check for Cisco prompt, password/username prompt, or confirm prompt
+        if (
+          CISCO_PROMPT_RE.test(collected) ||
+          INPUT_PROMPT_RE.test(collected) ||
+          CONFIRM_PROMPT_RE.test(collected)
+        ) {
           if (resolved) return;
           resolved = true;
           clearTimeout(timer);
@@ -183,6 +207,9 @@ export class ConnectionManager {
 
       conn.port.on("data", onData);
       conn.port.on("error", onError);
+
+      // Send command AFTER listeners are set up to avoid missing fast responses
+      conn.port.write(command + "\r\n");
     });
 
     // Clear the buffer since we've consumed the data
