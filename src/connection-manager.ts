@@ -124,38 +124,59 @@ export class ConnectionManager {
     conn.port.write(command + "\r\n");
 
     const output = await new Promise<string>((resolve, reject) => {
-      let collected = "";
+      let resolved = false;
       const timer = setTimeout(() => {
+        if (resolved) return;
+        resolved = true;
         cleanup();
-        resolve(collected.replace(/\r/g, ""));
+        // Return whatever we have on timeout instead of empty
+        const result = conn.buffer.replace(/\r/g, "");
+        resolve(result);
       }, timeoutMs);
 
-      const onData = () => {
-        collected = conn.buffer;
+      // Poll the buffer periodically to catch prompt reliably
+      const pollInterval = setInterval(() => {
+        if (resolved) return;
+        checkBuffer();
+      }, 100);
+
+      const checkBuffer = () => {
+        const collected = conn.buffer;
 
         // Handle -- More -- pagination
         if (MORE_RE.test(collected)) {
-          collected = collected.replace(MORE_RE, "");
-          conn.buffer = collected;
+          conn.buffer = collected.replace(MORE_RE, "");
           conn.port.write(" "); // send space to continue
           return;
         }
 
         // Check for Cisco prompt
         if (CISCO_PROMPT_RE.test(collected)) {
+          if (resolved) return;
+          resolved = true;
           clearTimeout(timer);
+          clearInterval(pollInterval);
           cleanup();
           resolve(collected.replace(/\r/g, ""));
         }
       };
 
+      const onData = () => {
+        if (resolved) return;
+        checkBuffer();
+      };
+
       const onError = (err: Error) => {
+        if (resolved) return;
+        resolved = true;
         clearTimeout(timer);
+        clearInterval(pollInterval);
         cleanup();
         reject(err);
       };
 
       const cleanup = () => {
+        clearInterval(pollInterval);
         conn.port.removeListener("data", onData);
         conn.port.removeListener("error", onError);
       };
