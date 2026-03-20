@@ -30,7 +30,11 @@ export function registerTools(
     "open_port",
     "Open a serial connection to a device",
     {
-      path: z.string().describe("Serial port path (e.g. /dev/tty.usbserial-110)"),
+      path: z
+        .string()
+        .describe(
+          "Serial port identifier/path (e.g. /dev/ttyUSB0, /dev/tty.usbserial-110, or COM3)"
+        ),
       baudRate: z.number().default(9600).describe("Baud rate (default: 9600)"),
       dataBits: z
         .union([z.literal(5), z.literal(6), z.literal(7), z.literal(8)])
@@ -74,7 +78,9 @@ export function registerTools(
     "close_port",
     "Close an open serial connection",
     {
-      path: z.string().describe("Serial port path to close"),
+      path: z
+        .string()
+        .describe("Serial port identifier/path to close (e.g. /dev/ttyUSB0 or COM3)"),
     },
     async ({ path }) => {
       try {
@@ -100,7 +106,9 @@ export function registerTools(
     "send_command",
     "Send a command to a Cisco device and wait for the prompt. Handles -- More -- pagination automatically.",
     {
-      path: z.string().describe("Serial port path"),
+      path: z
+        .string()
+        .describe("Serial port identifier/path (e.g. /dev/ttyUSB0 or COM3)"),
       command: z.string().describe("Command to send (e.g. 'show version')"),
       timeout: z
         .number()
@@ -131,7 +139,9 @@ export function registerTools(
     "write_raw",
     "Write raw string data to a serial port (no prompt waiting). Supports escape sequences: \\r \\n \\t \\x03 (Ctrl+C) etc.",
     {
-      path: z.string().describe("Serial port path"),
+      path: z
+        .string()
+        .describe("Serial port identifier/path (e.g. /dev/ttyUSB0 or COM3)"),
       data: z.string().describe("Raw data to write. Use \\r for CR, \\n for LF, \\x03 for Ctrl+C, \\x1b for ESC"),
     },
     async ({ path, data }) => {
@@ -172,7 +182,9 @@ export function registerTools(
     "read_buffer",
     "Read buffered data from a serial port (non-blocking)",
     {
-      path: z.string().describe("Serial port path"),
+      path: z
+        .string()
+        .describe("Serial port identifier/path (e.g. /dev/ttyUSB0 or COM3)"),
     },
     async ({ path }) => {
       try {
